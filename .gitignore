@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+snapshot.json
+questions.db
+media/
+.env
