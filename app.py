@@ -32,8 +32,9 @@ from pathlib import Path
 from collections import Counter, OrderedDict, defaultdict
 
 import requests
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import (HTMLResponse, JSONResponse, RedirectResponse,
+                               StreamingResponse)
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -48,8 +49,11 @@ PROJECT_ID = int(os.environ.get("LORIN_PROJECT_ID", "354"))
 SNAPSHOT_FILE = BASE_DIR / "snapshot.json"
 DB_FILE = BASE_DIR / "questions.db"
 MEDIA_DIR = BASE_DIR / "media"
+COLORSCRIPT_DIR = MEDIA_DIR / "colorscript"
 MEDIA_DIR.mkdir(exist_ok=True)
 VIDEO_EXT = {".mp4", ".mov", ".webm", ".m4v"}
+IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp"}
+_LEAD_NUM = re.compile(r"([0-9]+)")
 
 
 def _preview_media():
@@ -60,6 +64,20 @@ def _preview_media():
         return None
     p = vids[0]
     return {"url": f"/media/{p.name}", "name": p.name}
+
+
+def _colorscript():
+    """Colorscript frames dropped in /media/colorscript, labeled by shot number."""
+    if not COLORSCRIPT_DIR.exists():
+        return []
+    out = []
+    for p in sorted(COLORSCRIPT_DIR.iterdir()):
+        if p.suffix.lower() in IMAGE_EXT:
+            m = _LEAD_NUM.search(p.name)
+            shot = f"SHOT_{int(m.group(1)):04d}" if m else None
+            out.append({"shot": shot, "url": f"/media/colorscript/{p.name}", "name": p.stem})
+    out.sort(key=lambda x: (x["shot"] or "zzzz", x["name"]))
+    return out
 
 # ── Status system ────────────────────────────────────────────────────────────
 STATUS_META = OrderedDict([
@@ -283,6 +301,7 @@ def build_snapshot() -> dict:
         "steps": dict(step_counts),
         "layers": layers,
         "preview": _preview_media(),
+        "colorscript": _colorscript(),
         "shots": {"columns": _order_columns(shot_cols, SHOT_STEP_ORDER),
                   "rows": rows_sorted(shot_rows)},
         "assets": {"columns": _order_columns(asset_cols, ASSET_STEP_ORDER),
@@ -326,19 +345,25 @@ def _entity_image(etype: str, eid: int):
 
 
 def _media_url(vid: int, kind: str):
-    field = "sg_uploaded_movie" if kind == "movie" else "image"
     token = _get_token()
+    # For movies prefer the web-playable mp4 transcode over the original .mov.
+    fields = ("sg_uploaded_movie_mp4,sg_uploaded_movie"
+              if kind == "movie" else "image")
     r = requests.get(
         f"{SG_URL}/api/v1.1/entity/Version/{vid}",
         headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
-        params={"fields": field}, timeout=20,
+        params={"fields": fields}, timeout=20,
     )
     if r.status_code != 200:
         return None
-    val = (r.json().get("data") or {}).get("attributes", {}).get(field)
-    if isinstance(val, dict):
-        return val.get("url")
-    return val  # image is a plain URL string
+    attr = (r.json().get("data") or {}).get("attributes", {})
+    if kind == "movie":
+        for f in ("sg_uploaded_movie_mp4", "sg_uploaded_movie"):
+            val = attr.get(f)
+            if isinstance(val, dict) and val.get("url"):
+                return val["url"]
+        return None
+    return attr.get("image")  # image is a plain URL string
 
 
 # ── Questions store ──────────────────────────────────────────────────────────
@@ -404,6 +429,34 @@ def api_media(vid: int, kind: str = "movie"):
     if not url:
         raise HTTPException(404, "media not found")
     return RedirectResponse(url)
+
+
+@app.get("/api/movie/{vid}")
+def api_movie(vid: int, request: Request):
+    """Stream a Version's movie through the backend with HTTP range support.
+
+    Proxying (instead of redirecting to the short-lived S3 presigned URL) makes
+    <video> playback reliable — range requests are honored, the URL never
+    expires client-side, and inline autoplay works.
+    """
+    url = _media_url(vid, "movie")
+    if not url:
+        raise HTTPException(404, "no movie")
+    fwd = {}
+    rng = request.headers.get("range")
+    if rng:
+        fwd["Range"] = rng
+    up = requests.get(url, headers=fwd, stream=True, timeout=60)
+    passthru = {}
+    for h in ("Content-Length", "Content-Range", "Accept-Ranges",
+              "ETag", "Last-Modified"):
+        if h in up.headers:
+            passthru[h] = up.headers[h]
+    passthru.setdefault("Accept-Ranges", "bytes")
+    passthru["Content-Type"] = "video/mp4"  # we serve the mp4 transcode
+    passthru["Cache-Control"] = "no-store"
+    return StreamingResponse(up.iter_content(chunk_size=262144),
+                             status_code=up.status_code, headers=passthru)
 
 
 @app.get("/api/thumb/{etype}/{eid}")

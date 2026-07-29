@@ -242,6 +242,15 @@ table.mx td{border-bottom:1px solid var(--line); min-width:52px}
   display:flex; align-items:center; justify-content:center; transition:.18s; box-shadow:0 4px 18px rgba(0,0,0,.5)}
 .vcard:hover .play{transform:scale(1.12)}
 .vthumb .play svg{margin-left:3px}
+.vthumb .vpv{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#05070a; display:block}
+.vmax{position:absolute; top:9px; right:9px; z-index:3; width:30px; height:30px; border-radius:6px;
+  background:rgba(10,10,11,.6); backdrop-filter:blur(4px); border:1px solid rgba(255,255,255,.16);
+  color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:15px;
+  line-height:1; opacity:0; transition:.16s}
+.vcard:hover .vmax{opacity:1}
+.vmax:hover{background:var(--accent); border-color:var(--accent); color:var(--bg)}
+.vthumb .livedot{position:absolute; bottom:8px; left:9px; z-index:2; font-family:var(--font-m); font-size:9px;
+  letter-spacing:.1em; color:#fff; background:rgba(10,10,11,.5); padding:2px 7px; border-radius:100px; backdrop-filter:blur(4px)}
 .vinfo{padding:13px 15px}
 .vinfo .code{font-family:var(--font-m); font-size:12px; color:var(--ink); font-weight:500; word-break:break-all}
 .vinfo .row{display:flex; align-items:center; justify-content:space-between; margin-top:9px}
@@ -259,6 +268,22 @@ table.mx td{border-bottom:1px solid var(--line); min-width:52px}
 #modal .mh button{background:none; border:none; color:var(--dim); font-size:22px; cursor:pointer; line-height:1}
 #modal .mh button:hover{color:var(--accent)}
 #modal video{width:100%; display:block; background:#000; max-height:72vh}
+#modal img{width:100%; display:none; max-height:82vh; object-fit:contain; background:#000}
+
+/* ── colorscript gallery ── */
+.csgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:16px; margin-top:26px}
+.cscard{position:relative; border:1px solid var(--line2); border-radius:8px; overflow:hidden; cursor:pointer;
+  aspect-ratio:16/9; background:#0d0d0f center/cover no-repeat; transition:.18s; opacity:0; animation:rise .5s forwards}
+.cscard:hover{border-color:var(--accent); transform:translateY(-3px); box-shadow:0 14px 32px rgba(0,0,0,.45)}
+.cscard .lbl{position:absolute; left:0; right:0; bottom:0; padding:26px 14px 11px;
+  background:linear-gradient(0deg,rgba(10,10,11,.92),transparent);
+  font-family:var(--font-m); font-size:11px; color:var(--dim); letter-spacing:.04em;
+  display:flex; justify-content:space-between; align-items:flex-end; gap:8px}
+.cscard .lbl .sh{font-family:var(--font-d); font-weight:700; font-size:16px; letter-spacing:.03em; color:#fff; text-shadow:0 1px 8px rgba(0,0,0,.8)}
+.cscard .zoom{position:absolute; top:10px; right:10px; width:26px; height:26px; border-radius:5px;
+  background:rgba(10,10,11,.55); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center;
+  color:var(--ink); font-size:13px; opacity:0; transition:.16s}
+.cscard:hover .zoom{opacity:1}
 
 /* ── questions ── */
 .qwrap{max-width:860px; margin-top:26px}
@@ -331,12 +356,14 @@ footer{margin-top:60px; padding-top:20px; border-top:1px solid var(--line); font
   <nav class="tabs">
     <button data-tab="status" class="active">Painel</button>
     <button data-tab="review">Comp Review <span class="badge" id="vbadge"></span></button>
+    <button data-tab="colorscript">Colorscript <span class="badge" id="csbadge"></span></button>
   </nav>
 
   <div id="panel-status" class="panel on">
     <div class="loading-state"><div class="spin"></div>Puxando dados do ShotGrid…</div>
   </div>
   <div id="panel-review" class="panel"></div>
+  <div id="panel-colorscript" class="panel"></div>
 
   <footer>
     <span>LORINSPINOFF.ISAACBUZZOLA.COM</span>
@@ -347,6 +374,7 @@ footer{margin-top:60px; padding-top:20px; border-top:1px solid var(--line); font
 <div id="modal"><div class="box">
   <div class="mh"><span class="t" id="mtitle"></span><button onclick="closeModal()">&times;</button></div>
   <video id="mvideo" controls preload="auto"></video>
+  <img id="mimg" alt="">
 </div></div>
 <div id="tip"></div>
 
@@ -492,10 +520,13 @@ function renderReview(d){
     `<div class="sec"><div class="sec-h"><h2>Comp Review</h2><div class="rule"></div></div>
      <div class="empty-note">Nenhuma Version com vídeo no ShotGrid ainda.</div></div>`; return; }
   const cards=vs.map((v,i)=>{ const m=meta(v.status);
-    const thumb=v.has_thumb?`/api/media/${v.id}?kind=thumb`:"";
-    return `<div class="vcard" style="animation-delay:${i*45}ms" onclick="openMovie(${v.id},'${(v.code||'').replace(/'/g,"")}',${v.has_movie})">
-      <div class="vthumb" style="${thumb?`background-image:url('${thumb}')`:''}">
-        <div class="play"><svg width="16" height="18" viewBox="0 0 16 18"><path d="M0 0l16 9-16 9z" fill="#0A0A0B"/></svg></div></div>
+    const poster=v.has_thumb?`poster="/api/media/${v.id}?kind=thumb"`:"";
+    return `<div class="vcard" style="animation-delay:${i*45}ms">
+      <div class="vthumb" onclick="openMovieV(${v.id},'${(v.code||'').replace(/'/g,"")}')">
+        <video class="vpv" muted loop playsinline preload="none" ${poster} data-src="/api/movie/${v.id}"></video>
+        <span class="livedot">LOOP</span>
+        <button class="vmax" title="Maximizar" onclick="event.stopPropagation();openMovieV(${v.id},'${(v.code||'').replace(/'/g,"")}')">⤢</button>
+      </div>
       <div class="vinfo"><div class="code">${v.code||"—"}</div>
         <div class="row"><span class="shot">${v.shot||""}</span>
           <span class="vchip" style="color:${m.color};background:${m.color}22"><span class="sw" style="background:${m.color}"></span>${m.label}</span>
@@ -503,13 +534,49 @@ function renderReview(d){
   document.getElementById("panel-review").innerHTML=prev+
     `<div class="sec"><div class="sec-h"><h2>Comp Review</h2><div class="rule"></div><div class="c">${vs.length} versions com mídia</div></div>
      <div class="rgrid">${cards}</div></div>`;
+  observeVideos();
 }
-function openMovie(id,title,hasMovie){ if(!hasMovie) return;
+function observeVideos(){
+  const vids=document.querySelectorAll("#panel-review .vpv");
+  if(!("IntersectionObserver" in window)){
+    vids.forEach(v=>{ v.src=v.dataset.src; v.play().catch(()=>{}); }); return; }
+  const io=new IntersectionObserver(es=>es.forEach(e=>{ const v=e.target;
+    if(e.isIntersecting){ if(!v.src) v.src=v.dataset.src; v.play().catch(()=>{}); }
+    else { v.pause(); } }), {threshold:.2});
+  vids.forEach(v=>io.observe(v));
+}
+function openMovieV(id,title){
   document.getElementById("mtitle").textContent=title;
-  const v=document.getElementById("mvideo"); v.src=`/api/media/${id}?kind=movie`;
+  const v=document.getElementById("mvideo"), im=document.getElementById("mimg");
+  im.style.display="none"; im.removeAttribute("src");
+  v.style.display="block"; v.muted=false; v.loop=true; v.src=`/api/movie/${id}`;
   document.getElementById("modal").classList.add("on"); v.play().catch(()=>{}); }
-function closeModal(){ const v=document.getElementById("mvideo"); v.pause(); v.removeAttribute("src"); v.load();
+function openImg(url,title){
+  document.getElementById("mtitle").textContent=title;
+  const v=document.getElementById("mvideo"), im=document.getElementById("mimg");
+  v.pause(); v.removeAttribute("src"); v.style.display="none";
+  im.src=url; im.style.display="block";
+  document.getElementById("modal").classList.add("on"); }
+function closeModal(){ const v=document.getElementById("mvideo"), im=document.getElementById("mimg");
+  v.pause(); v.removeAttribute("src"); v.load(); im.removeAttribute("src"); im.style.display="none";
   document.getElementById("modal").classList.remove("on"); }
+
+/* ── COLORSCRIPT ── */
+function renderColorscript(d){
+  const cs=d.colorscript||[];
+  const b=document.getElementById("csbadge"); if(b) b.textContent=cs.length?("· "+cs.length):"";
+  if(!cs.length){ document.getElementById("panel-colorscript").innerHTML=
+    `<div class="sec"><div class="sec-h"><h2>Colorscript</h2><div class="rule"></div></div>
+     <div class="empty-note">Sem colorscript ainda.</div></div>`; return; }
+  const cards=cs.map((c,i)=>`<div class="cscard" style="background-image:url('${c.url}');animation-delay:${Math.min(i*30,500)}ms"
+      onclick="openImg('${c.url}','${((c.shot||'')+' · '+c.name).replace(/'/g,'')}')">
+      <div class="zoom">⤢</div>
+      <div class="lbl"><span class="sh">${c.shot?c.shot.replace('SHOT_',''):c.name}</span><span>${c.name}</span></div>
+    </div>`).join("");
+  document.getElementById("panel-colorscript").innerHTML=
+    `<div class="sec"><div class="sec-h"><h2>Colorscript</h2><div class="rule"></div><div class="c">${cs.length} frames</div></div>
+     <div class="csgrid">${cards}</div></div>`;
+}
 document.getElementById("modal").addEventListener("click",e=>{ if(e.target.id==="modal") closeModal(); });
 document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeModal(); });
 
@@ -570,7 +637,7 @@ async function load(doRefresh){
     DATA=await res.json(); META=DATA.status_meta;
     document.getElementById("tcount").textContent=DATA.totals.tasks+" TASKS";
     document.getElementById("stamp").textContent="UPDATED "+fmtStamp(DATA.updated_at);
-    renderStatus(DATA); renderReview(DATA);
+    renderStatus(DATA); renderReview(DATA); renderColorscript(DATA);
   }catch(e){ document.getElementById("panel-status").innerHTML=`<div class="loading-state">Falha ao carregar: ${e.message}</div>`; }
   finally{ btn.classList.remove("loading"); btn.disabled=false; }
 }
