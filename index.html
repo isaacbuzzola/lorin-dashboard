@@ -22,6 +22,7 @@
   --font-b:"Aeonik",sans-serif;
 }
 *{margin:0;padding:0;box-sizing:border-box}
+html,body{overflow-x:hidden; max-width:100%}
 html{-webkit-font-smoothing:antialiased}
 body{
   background:var(--bg); color:var(--ink); font-family:var(--font-b);
@@ -327,6 +328,61 @@ table.mx td{border-bottom:1px solid var(--line); min-width:52px}
 footer{margin-top:60px; padding-top:20px; border-top:1px solid var(--line); font-family:var(--font-m);
   font-size:10.5px; color:var(--dim2); letter-spacing:.03em; display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px}
 @media(max-width:720px){.hero{grid-template-columns:1fr; justify-items:center; text-align:center}}
+
+/* ── responsivo / mobile ── */
+@media(max-width:860px){
+  .th-title h1{font-size:clamp(42px,10vw,84px)}
+  .kpis{grid-template-columns:repeat(3,1fr)}
+  .ecards{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+}
+@media(max-width:680px){
+  .wrap{padding:14px 14px 60px}
+  .titlehero{height:clamp(210px,54vw,320px); border-radius:7px}
+  .th-top{padding:12px 14px}
+  .th-eyebrow{display:none}
+  .th-title{padding:0 16px 18px; max-width:100%}
+  .th-kicker{font-size:10px; margin-bottom:8px}
+  .th-title h1{font-size:clamp(40px,12.5vw,66px)}
+  .th-title .meta{display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; margin-top:12px}
+  #refresh{padding:9px 15px; font-size:11px}
+  .stamp{font-size:9.5px}
+  .tabs{gap:8px; margin:18px 0 4px; flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch}
+  .tabs::-webkit-scrollbar{display:none}
+  .tabs button{padding:11px 16px; font-size:11px; letter-spacing:.05em; flex:0 0 auto; white-space:nowrap}
+  .hero{padding:20px 16px; gap:20px; margin:18px 0 26px}
+  .ring{width:120px; height:120px}
+  .ring svg{width:120px; height:120px}
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .kpi{padding:14px 15px}
+  .kpi .n{font-size:26px}
+  .sec{margin-top:30px}
+  .sec-h{gap:10px}
+  .sec-h h2{font-size:13px; letter-spacing:.1em}
+  .brief{padding:18px 16px; margin:20px 0 6px}
+  .brief h2{font-size:20px}
+  .qb{flex-wrap:wrap; padding:14px 15px; gap:12px}
+  .qb .b{flex:1 1 calc(100% - 40px)}
+  .qb .t{font-size:15px}
+  .qb .acts{width:100%; padding-left:40px; margin-top:2px}
+  .addrow{flex-wrap:wrap}
+  .addrow input, .addrow input.who, .addrow button{flex:1 1 100%; width:100%}
+  .addrow button{padding:13px}
+  .lanes{grid-template-columns:repeat(auto-fill,minmax(148px,1fr)); gap:10px}
+  .lane .num{font-size:30px}
+  .lay{grid-template-columns:1fr; gap:9px; padding:14px 15px}
+  .lay .name{font-size:18px}
+  .lay .nums{text-align:left}
+  .ecards,.rgrid,.csgrid{grid-template-columns:1fr; gap:13px}
+  .type-h{font-size:19px; margin:22px 0 12px}
+  .feature video{max-height:52vh}
+  #modal{padding:12px}
+  #modal .mh{padding:11px 14px}
+  #modal video, #modal img{max-height:64vh}
+  .wrap{max-width:100%}
+  .hero>*, .kpis>*, .lanes>*, .lane>*, .lay>*, .qb>*, .qb .b, .sec-h>*,
+  .th-top>*, .addrow>*, .vinfo>*, .vinfo .row>*, .brief .bh>*{min-width:0}
+  .sec-h .c, .vchip, .lay .nums, .qb .meta{overflow-wrap:anywhere}
+}
 </style>
 </head>
 <body>
