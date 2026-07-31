@@ -271,6 +271,37 @@ table.mx td{border-bottom:1px solid var(--line); min-width:52px}
 #modal video{width:100%; display:block; background:#000; max-height:72vh}
 #modal img{width:100%; display:none; max-height:82vh; object-fit:contain; background:#000}
 
+/* ── animation review ── */
+.angrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(360px,1fr)); gap:18px; margin-top:26px}
+.ancard{background:var(--panel); border:1px solid var(--line2); border-radius:9px; overflow:hidden;
+  transition:.18s; opacity:0; animation:rise .5s forwards}
+.ancard.checked{border-color:#46c266; box-shadow:0 0 0 1px rgba(70,194,102,.35)}
+.anvid{position:relative; aspect-ratio:16/9; background:#05070a; cursor:pointer; border-bottom:1px solid var(--line2)}
+.anbody{padding:14px 16px 16px}
+.anhead{display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:13px}
+.ancode{font-family:var(--font-m); font-size:12.5px; color:var(--ink); word-break:break-all}
+.anshot{font-family:var(--font-m); font-size:10.5px; color:var(--dim); margin-top:3px}
+.ancheck{display:flex; align-items:center; gap:7px; cursor:pointer; font-family:var(--font-m); font-size:11px;
+  letter-spacing:.06em; text-transform:uppercase; color:var(--dim); flex-shrink:0; user-select:none;
+  padding:7px 11px; border:1px solid var(--line2); border-radius:6px; transition:.15s}
+.ancard.checked .ancheck{color:#46c266; border-color:#46c266; background:rgba(70,194,102,.1)}
+.ancheck input{accent-color:#46c266; width:15px; height:15px; cursor:pointer; margin:0}
+.ancomments{display:flex; flex-direction:column; gap:8px; margin-bottom:12px; max-height:230px; overflow-y:auto}
+.cm{background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:9px 12px}
+.cm-t{font-size:13.5px; line-height:1.45; color:var(--ink); white-space:pre-wrap; word-break:break-word}
+.cm-m{font-family:var(--font-m); font-size:9.5px; color:var(--dim2); margin-top:6px; display:flex; align-items:center; gap:8px}
+.cm-m button{margin-left:auto; background:none; border:none; color:var(--dim2); cursor:pointer; font-size:14px; line-height:1}
+.cm-m button:hover{color:var(--accent)}
+.cm-empty{font-family:var(--font-m); font-size:11px; color:var(--dim2); padding:4px 0}
+.anadd{display:flex; gap:8px}
+.anadd input{flex:1; min-width:0; background:var(--bg); border:1px solid var(--line2); border-radius:6px;
+  color:var(--ink); font-family:var(--font-b); font-size:13.5px; padding:10px 12px; outline:none}
+.anadd input:focus{border-color:var(--accent2)}
+.anadd button{font-family:var(--font-m); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
+  color:var(--bg); background:var(--accent); border:none; padding:0 16px; border-radius:6px; cursor:pointer; flex-shrink:0}
+.anadd button:hover{filter:brightness(1.1)}
+.ecard .ethumb.hasvid{cursor:pointer}
+
 /* ── colorscript gallery ── */
 .csgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:16px; margin-top:26px}
 .cscard{position:relative; border:1px solid var(--line2); border-radius:8px; overflow:hidden; cursor:pointer;
@@ -412,6 +443,7 @@ footer{margin-top:60px; padding-top:20px; border-top:1px solid var(--line); font
   <nav class="tabs">
     <button data-tab="status" class="active">Painel</button>
     <button data-tab="review">Comp Review <span class="badge" id="vbadge"></span></button>
+    <button data-tab="animation">Animation <span class="badge" id="anbadge"></span></button>
     <button data-tab="colorscript">Colorscript <span class="badge" id="csbadge"></span></button>
   </nav>
 
@@ -419,6 +451,7 @@ footer{margin-top:60px; padding-top:20px; border-top:1px solid var(--line); font
     <div class="loading-state"><div class="spin"></div>Puxando dados do ShotGrid…</div>
   </div>
   <div id="panel-review" class="panel"></div>
+  <div id="panel-animation" class="panel"></div>
   <div id="panel-colorscript" class="panel"></div>
 
   <footer>
@@ -513,7 +546,7 @@ function renderStatus(d){
     <div class="sec"><div class="sec-h"><h2>Assets</h2><div class="rule"></div><div class="c">${d.assets.rows.length} assets</div></div>${assetCardsHTML(d)}</div>
     ${legend}`;
   requestAnimationFrame(()=>{const c=document.querySelector('.ring circle[data-off]'); if(c)c.style.strokeDashoffset=c.dataset.off;});
-  loadQuestions();
+  loadQuestions(); observeVideos();
 }
 function stepAbbr(s){const M={Layout:"LAY",Cam:"CAM",Animation:"ANM",AnimSh:"ASH",FX:"FX",CFX:"CFX",Lighting:"LGT",Comp:"CMP",Render:"RND",Online:"ONL",Model:"MDL",Rig:"RIG",Fur:"FUR",LookDev:"LKD",Turn:"TRN"};return M[s]||s.slice(0,3).toUpperCase();}
 function cardPct(r,cols){let have=0,done=0; cols.forEach(c=>{const st=r.cells[c]; if(st){have++; if(meta(st).bucket==="done")done++;}}); return have?Math.round(100*done/have):0;}
@@ -524,12 +557,22 @@ function ecard(r,cols,etype,i){
     return `<span class="estep" style="color:${m.color};background:${m.color}1e"
       onmousemove="showTip('<span class=&quot;k&quot;>${c}</span><br><b>${m.label}</b>',event.clientX,event.clientY)" onmouseleave="hideTip()"><span class="d" style="background:${m.color}"></span>${stepAbbr(c)}</span>`;
   }).join("");
-  const thumb=r.has_thumb?`style="background-image:url('/api/thumb/${etype}/${r.id}')"`:"";
-  const num=(r.name.match(/[0-9]+/)||[""])[0];
-  const ph=r.has_thumb?"":`<div class="ph">${etype==="Shot"?(num||"—"):(r.name.slice(0,2).toUpperCase())}</div>`;
+  const nm=(r.name||"").replace(/'/g,"");
+  let head;
+  if(r.video_id){
+    head=`<div class="ethumb hasvid" onclick="openMovieV(${r.video_id},'${nm}')">
+      <video class="vpv" muted loop playsinline preload="none" data-src="/api/movie/${r.video_id}"></video>
+      <span class="livedot">LOOP</span>
+      <button class="vmax" title="Maximizar" onclick="event.stopPropagation();openMovieV(${r.video_id},'${nm}')">⤢</button>
+      <span class="pct2">${cardPct(r,cols)}%</span></div>`;
+  } else {
+    const thumb=r.has_thumb?`style="background-image:url('/api/thumb/${etype}/${r.id}')"`:"";
+    const num=(r.name.match(/[0-9]+/)||[""])[0];
+    const ph=r.has_thumb?"":`<div class="ph">${etype==="Shot"?(num||"—"):(r.name.slice(0,2).toUpperCase())}</div>`;
+    head=`<div class="ethumb" ${thumb}>${ph}<span class="pct2">${cardPct(r,cols)}%</span></div>`;
+  }
   return `<div class="ecard" style="animation-delay:${Math.min(i*22,500)}ms">
-    <div class="ethumb" ${thumb}>${ph}<span class="pct2">${cardPct(r,cols)}%</span></div>
-    <div class="ebody"><div class="ename">${r.name}</div><div class="esteps">${chips}</div></div></div>`;
+    ${head}<div class="ebody"><div class="ename">${r.name}</div><div class="esteps">${chips}</div></div></div>`;
 }
 function shotCardsHTML(d){ return `<div class="ecards">${d.shots.rows.map((r,i)=>ecard(r,d.shots.columns,"Shot",i)).join("")}</div>`; }
 function assetCardsHTML(d){
@@ -592,14 +635,15 @@ function renderReview(d){
      <div class="rgrid">${cards}</div></div>`;
   observeVideos();
 }
+let _io;
 function observeVideos(){
-  const vids=document.querySelectorAll("#panel-review .vpv");
+  const list=document.querySelectorAll(".vpv[data-src]:not([data-obs])");
   if(!("IntersectionObserver" in window)){
-    vids.forEach(v=>{ v.src=v.dataset.src; v.play().catch(()=>{}); }); return; }
-  const io=new IntersectionObserver(es=>es.forEach(e=>{ const v=e.target;
+    list.forEach(v=>{ v.dataset.obs="1"; v.src=v.dataset.src; v.play().catch(()=>{}); }); return; }
+  if(!_io){ _io=new IntersectionObserver(es=>es.forEach(e=>{ const v=e.target;
     if(e.isIntersecting){ if(!v.src) v.src=v.dataset.src; v.play().catch(()=>{}); }
-    else { v.pause(); } }), {threshold:.2});
-  vids.forEach(v=>io.observe(v));
+    else { v.pause(); } }), {threshold:.2}); }
+  list.forEach(v=>{ v.dataset.obs="1"; _io.observe(v); });
 }
 function openMovieV(id,title){
   document.getElementById("mtitle").textContent=title;
@@ -683,6 +727,70 @@ function editQ(id){
     if(e.key==="Escape"){ta.removeEventListener("blur",save);loadQuestions();} });
 }
 
+/* ── ANIMATION (playblasts + review) ── */
+function renderAnimation(d){
+  const an=d.anim||[];
+  const b=document.getElementById("anbadge"); if(b) b.textContent=an.length?("· "+an.length):"";
+  const panel=document.getElementById("panel-animation");
+  if(!an.length){ panel.innerHTML=
+    `<div class="sec"><div class="sec-h"><h2>Animation</h2><div class="rule"></div></div>
+     <div class="empty-note">Sem playblasts ainda — suba as Versions de Animation no ShotGrid e clique em Refresh.</div></div>`; return; }
+  const cards=an.map((v,i)=>{ const m=meta(v.status); const nm=(v.code||"").replace(/'/g,"");
+    return `<div class="ancard" data-id="${v.id}" style="animation-delay:${Math.min(i*45,500)}ms">
+      <div class="anvid" onclick="openMovieV(${v.id},'${nm}')">
+        <video class="vpv" muted loop playsinline preload="none" data-src="/api/movie/${v.id}"></video>
+        <span class="livedot">LOOP</span>
+        <button class="vmax" title="Maximizar" onclick="event.stopPropagation();openMovieV(${v.id},'${nm}')">⤢</button>
+      </div>
+      <div class="anbody">
+        <div class="anhead">
+          <div><div class="ancode">${v.code||"—"}</div><div class="anshot">${v.shot||""} · <span style="color:${m.color}">${m.label}</span></div></div>
+          <label class="ancheck"><input type="checkbox" onchange="toggleCheck(${v.id},this.checked)"><span>Check</span></label>
+        </div>
+        <div class="ancomments" id="cm-${v.id}"></div>
+        <div class="anadd">
+          <input id="ci-${v.id}" placeholder="Comentário…" onkeydown="if(event.key==='Enter')addComment(${v.id})">
+          <button onclick="addComment(${v.id})">Enviar</button>
+        </div>
+      </div></div>`;}).join("");
+  panel.innerHTML=`<div class="sec"><div class="sec-h"><h2>Animation</h2><div class="rule"></div>
+    <div class="c">${an.length} playblasts</div></div><div class="angrid">${cards}</div></div>`;
+  observeVideos();
+  loadReviews();
+}
+async function loadReviews(){
+  try{
+    const r=await (await fetch("/api/reviews")).json();
+    document.querySelectorAll(".ancard").forEach(card=>{
+      const id=card.dataset.id, on=!!r.checked[id];
+      const cb=card.querySelector(".ancheck input"); if(cb) cb.checked=on;
+      card.classList.toggle("checked",on);
+      renderComments(id, r.comments[id]||[]);
+    });
+  }catch(e){}
+}
+function renderComments(vid,list){
+  const el=document.getElementById("cm-"+vid); if(!el) return;
+  el.innerHTML = list.length ? list.map(c=>`<div class="cm">
+    <div class="cm-t">${esc(c.text)}</div>
+    <div class="cm-m">${c.author?esc(c.author)+" · ":""}${fmtDate(c.created_at)}
+      <button title="Excluir" onclick="delComment(${c.id})">&times;</button></div></div>`).join("")
+    : `<div class="cm-empty">Sem comentários.</div>`;
+}
+async function toggleCheck(vid,checked){
+  const card=document.querySelector(`.ancard[data-id="${vid}"]`); if(card) card.classList.toggle("checked",checked);
+  await fetch(`/api/review/${vid}/check`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({checked})});
+}
+async function addComment(vid){
+  const inp=document.getElementById("ci-"+vid); const text=inp.value.trim(); if(!text) return;
+  inp.value="";
+  await fetch(`/api/review/${vid}/comment`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text,author:null})});
+  loadReviews();
+}
+async function delComment(cid){
+  await fetch(`/api/review/comment/${cid}`,{method:"DELETE"}); loadReviews();
+}
+
 /* ── load ── */
 async function load(doRefresh){
   const btn=document.getElementById("refresh");
@@ -693,7 +801,7 @@ async function load(doRefresh){
     DATA=await res.json(); META=DATA.status_meta;
     document.getElementById("tcount").textContent=DATA.totals.tasks+" TASKS";
     document.getElementById("stamp").textContent="UPDATED "+fmtStamp(DATA.updated_at);
-    renderStatus(DATA); renderReview(DATA); renderColorscript(DATA);
+    renderStatus(DATA); renderReview(DATA); renderAnimation(DATA); renderColorscript(DATA);
   }catch(e){ document.getElementById("panel-status").innerHTML=`<div class="loading-state">Falha ao carregar: ${e.message}</div>`; }
   finally{ btn.classList.remove("loading"); btn.disabled=false; }
 }

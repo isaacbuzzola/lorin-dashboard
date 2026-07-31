@@ -231,29 +231,41 @@ def build_snapshot() -> dict:
 
     def rows_sorted(rows):
         return [{"id": r["id"], "name": r["name"], "has_thumb": r.get("has_thumb", False),
-                 "cells": r["cells"], **({"type": r["type"]} if "type" in r else {})}
+                 "cells": r["cells"],
+                 **({"type": r["type"]} if "type" in r else {}),
+                 **({"video_id": r["video_id"]} if "video_id" in r else {})}
                 for r in sorted(rows.values(), key=lambda x: str(x["name"])) if r["cells"]]
 
-    # Comp Review shows ONLY comp versions (task = Comp) — no Turn/other media.
-    vlist = []
+    # Bucket versions: Comp (shot) -> Comp Review, Animation (shot) -> Animation
+    # tab, and any Asset version with a movie -> inline video on the asset card.
+    vlist, anim_list = [], []
+    asset_video = {}  # asset_id -> version_id (first seen with a movie)
     for v in versions:
         a = v["attributes"]
-        task_name = (_rel(v, "sg_task").get("name") or "").strip()
-        if task_name.lower() != "comp":
-            continue
-        mov = a.get("sg_uploaded_movie") or {}
+        task_name = (_rel(v, "sg_task").get("name") or "").strip().lower()
         ent = _rel(v, "entity")
+        mov = a.get("sg_uploaded_movie") or {}
         code = a.get("code")
-        vlist.append({
-            "id": v["id"],
-            "code": code,
+        item = {
+            "id": v["id"], "code": code,
             "shot": ent.get("name") or _shot_from_code(code),
             "status": a.get("sg_status_list"),
             "has_thumb": bool(a.get("image")),
             "has_movie": bool(mov),
-            "created_at": a.get("created_at"),
-        })
+        }
+        if ent.get("type") == "Shot" and task_name == "comp":
+            vlist.append(item)
+        elif ent.get("type") == "Shot" and task_name == "animation":
+            anim_list.append(item)
+        elif ent.get("type") == "Asset" and mov:
+            aid = ent.get("id")
+            if aid and aid not in asset_video:
+                asset_video[aid] = v["id"]
     vlist.sort(key=lambda x: str(x["code"]))
+    anim_list.sort(key=lambda x: str(x["shot"] or x["code"]))
+    for aid, vid in asset_video.items():
+        if aid in asset_rows:
+            asset_rows[aid]["video_id"] = vid
 
     # Per-layer (pipeline step) breakdown, ordered shot-steps then asset-steps.
     layers = []
@@ -302,6 +314,7 @@ def build_snapshot() -> dict:
         "layers": layers,
         "preview": _preview_media(),
         "colorscript": _colorscript(),
+        "anim": anim_list,
         "shots": {"columns": _order_columns(shot_cols, SHOT_STEP_ORDER),
                   "rows": rows_sorted(shot_rows)},
         "assets": {"columns": _order_columns(asset_cols, ASSET_STEP_ORDER),
@@ -382,6 +395,16 @@ def init_db():
             status TEXT NOT NULL DEFAULT 'open',
             created_at TEXT,
             resolved_at TEXT)""")
+        c.execute("""CREATE TABLE IF NOT EXISTS anim_review(
+            version_id INTEGER PRIMARY KEY,
+            checked INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT)""")
+        c.execute("""CREATE TABLE IF NOT EXISTS anim_comment(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            version_id INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            author TEXT,
+            created_at TEXT)""")
 
 
 init_db()
@@ -395,6 +418,15 @@ class QIn(BaseModel):
 class QPatch(BaseModel):
     text: str | None = None
     status: str | None = None
+
+
+class CheckIn(BaseModel):
+    checked: bool
+
+
+class CommentIn(BaseModel):
+    text: str
+    author: str | None = None
 
 
 def _now():
@@ -515,6 +547,49 @@ def q_patch(qid: int, q: QPatch):
 def q_del(qid: int):
     with _db() as c:
         c.execute("DELETE FROM questions WHERE id=?", (qid,))
+    return {"ok": True}
+
+
+# ─── Animation review (check + comments per Version) ─────────────────────────
+@app.get("/api/reviews")
+def reviews():
+    with _db() as c:
+        checked = {r["version_id"]: True for r in
+                   c.execute("SELECT version_id FROM anim_review WHERE checked=1")}
+        comments: dict[int, list] = {}
+        for r in c.execute("SELECT * FROM anim_comment ORDER BY id ASC"):
+            comments.setdefault(r["version_id"], []).append(dict(r))
+    return {"checked": checked, "comments": comments}
+
+
+@app.post("/api/review/{vid}/check")
+def review_check(vid: int, body: CheckIn):
+    with _db() as c:
+        c.execute(
+            "INSERT INTO anim_review(version_id,checked,updated_at) VALUES(?,?,?) "
+            "ON CONFLICT(version_id) DO UPDATE SET checked=excluded.checked, "
+            "updated_at=excluded.updated_at",
+            (vid, 1 if body.checked else 0, _now()))
+    return {"version_id": vid, "checked": body.checked}
+
+
+@app.post("/api/review/{vid}/comment")
+def review_comment(vid: int, body: CommentIn):
+    text = (body.text or "").strip()
+    if not text:
+        raise HTTPException(400, "empty comment")
+    with _db() as c:
+        cur = c.execute(
+            "INSERT INTO anim_comment(version_id,text,author,created_at) VALUES(?,?,?,?)",
+            (vid, text, (body.author or "").strip() or None, _now()))
+        row = c.execute("SELECT * FROM anim_comment WHERE id=?", (cur.lastrowid,)).fetchone()
+    return dict(row)
+
+
+@app.delete("/api/review/comment/{cid}")
+def review_comment_del(cid: int):
+    with _db() as c:
+        c.execute("DELETE FROM anim_comment WHERE id=?", (cid,))
     return {"ok": True}
 
 
